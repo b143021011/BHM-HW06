@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧資訊看板 - 天氣與寶可夢</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter & Press Start 2P -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: #f8fafc;
+            transition: background 1s ease;
+        }
+
+        /* Glassmorphism Effect */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Day and Night Dynamic Themes */
+        .theme-day {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #0284c7 100%);
+        }
+
+        .theme-night {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+        }
+
+        /* Pokémon Type Custom Themes */
+        .theme-fire { background: linear-gradient(135deg, #451208 0%, #7f1d1d 50%, #9a3412 100%); }
+        .theme-water { background: linear-gradient(135deg, #0c2a4a 0%, #1e3a8a 50%, #0369a1 100%); }
+        .theme-grass { background: linear-gradient(135deg, #062e1a 0%, #14532d 50%, #15803d 100%); }
+        .theme-electric { background: linear-gradient(135deg, #3f2c00 0%, #713f12 50%, #a16207 100%); }
+        .theme-psychic { background: linear-gradient(135deg, #4a042e 0%, #831843 50%, #be185d 100%); }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Pokemon Card Float & Glow Animations */
+        .poke-img-container img {
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.5));
+        }
+
+        .poke-float {
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+
+        .img-fade-out {
+            opacity: 0;
+            transform: scale(0.85) translateY(20px);
+        }
+
+        .img-fade-in {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+
+        /* Pulse Progress Animation for Slideshow */
+        @keyframes timerProgress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        .progress-running {
+            animation: timerProgress 10s linear infinite;
+        }
+
+        .progress-paused {
+            animation-play-state: paused;
+        }
+
+        /* Pokéball Loading Animation */
+        @keyframes pokeballSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .pokeball-spin {
+            animation: pokeballSpin 1.2s linear infinite;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen theme-night p-4 md:p-6 lg:p-8">
+
+    <!-- Top Navigation Header -->
+    <header class="max-w-7xl w-full mx-auto mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 glass-panel p-4 rounded-2xl">
+        <div class="flex items-center space-x-3">
+            <div class="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl flex items-center justify-center">
+                <i class="fa-solid fa-bolt text-amber-400 text-xl mr-2"></i>
+                <i class="fa-solid fa-cloud-sun text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold tracking-wide bg-gradient-to-r from-amber-300 via-indigo-300 to-sky-300 bg-clip-text text-transparent">
+                    寶可夢天氣看板
+                </h1>
+                <p id="live-clock" class="text-xs text-slate-300 font-medium">載入時間中...</p>
+            </div>
+        </div>
+
+        <!-- City Search & Geolocation Controls -->
+        <div class="flex items-center space-x-2 w-full sm:w-auto">
+            <div class="relative w-full sm:w-64">
+                <input type="text" id="city-search-input" placeholder="搜尋城市 (如: Taipei)" 
+                    class="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-4 py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-100 placeholder-slate-400 transition-all">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-2.5 text-slate-400 text-sm"></i>
+            </div>
+            <button id="search-btn" title="搜尋地點" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-bold rounded-xl transition-all shadow-md active:scale-95">
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+            <button id="gps-btn" title="使用當前定位" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 text-sm font-medium rounded-xl transition-all shadow-md active:scale-95">
+                <i class="fa-solid fa-location-crosshairs text-base"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
+        
+        <!-- Left Column: Weather Information (6 Columns on Large Screens) -->
+        <section class="lg:col-span-6 flex flex-col gap-6">
+            
+            <!-- Weather Overview Box -->
+            <div class="glass-panel p-6 rounded-3xl flex flex-col justify-between relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-location-dot text-amber-400"></i>
+                            <h2 id="location-name" class="text-2xl font-bold text-slate-100">載入位置...</h2>
+                        </div>
+                        <p id="weather-description" class="text-sm text-slate-300 mt-1">取得最新氣象資料</p>
+                    </div>
+                    <span id="update-timer" class="text-xs bg-slate-800/80 text-slate-400 px-3 py-1.5 rounded-full border border-slate-700/50">
+                        <i class="fa-regular fa-clock mr-1"></i>自動更新: 15分
+                    </span>
+                </div>
+
+                <!-- Main Temperature Showcase -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center my-2">
+                    <div class="flex items-center space-x-4">
+                        <div id="weather-icon-container" class="text-6xl text-amber-400 filter drop-shadow-md">
+                            <i class="fa-solid fa-sun-plant-wilt"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-baseline">
+                                <span id="current-temp" class="text-6xl font-extrabold tracking-tight">--</span>
+                                <span class="text-2xl text-slate-300 font-light ml-1">°C</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">體感溫度 <span id="feels-like">--</span>°C</p>
+                        </div>
+                    </div>
+
+                    <!-- Additional Metrics Cards -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="glass-card p-3 rounded-2xl flex flex-col">
+                            <span class="text-xs text-slate-400 font-medium"><i class="fa-solid fa-droplet text-blue-400 mr-1.5"></i>相對濕度</span>
+                            <span id="humidity" class="text-lg font-bold text-slate-100 mt-1">-- %</span>
+                        </div>
+                        <div class="glass-card p-3 rounded-2xl flex flex-col">
+                            <span class="text-xs text-slate-400 font-medium"><i class="fa-solid fa-wind text-teal-400 mr-1.5"></i>風速</span>
+                            <span id="wind-speed" class="text-lg font-bold text-slate-100 mt-1">-- km/h</span>
+                        </div>
+                        <div class="glass-card p-3 rounded-2xl flex flex-col">
+                            <span class="text-xs text-slate-400 font-medium"><i class="fa-solid fa-temperature-arrow-up text-rose-400 mr-1.5"></i>最高氣溫</span>
+                            <span id="temp-max" class="text-lg font-bold text-slate-100 mt-1">-- °C</span>
+                        </div>
+                        <div class="glass-card p-3 rounded-2xl flex flex-col">
+                            <span class="text-xs text-slate-400 font-medium"><i class="fa-solid fa-temperature-arrow-down text-indigo-400 mr-1.5"></i>最低氣溫</span>
+                            <span id="temp-min" class="text-lg font-bold text-slate-100 mt-1">-- °C</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 24-Hour Hourly Forecast Carousel -->
+                <div class="mt-6">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">24 小時逐時預報</h3>
+                    <div id="hourly-forecast" class="flex space-x-3 overflow-x-auto pb-2 pt-1 scrollbar-thin">
+                        <div class="text-xs text-slate-500 py-4">正在載入逐時預報...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7-Day Forecast Card -->
+            <div class="glass-panel p-6 rounded-3xl flex-grow flex flex-col justify-between">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">未來 7 天天氣預報</h3>
+                <div id="daily-forecast" class="grid grid-cols-2 sm:grid-cols-7 gap-2">
+                    <div class="col-span-full text-center text-xs text-slate-500 py-4">正在載入 7 天預報...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column: Pokémon Card Showcase (6 Columns on Large Screens) -->
+        <section class="lg:col-span-6 flex flex-col">
+            <div class="glass-panel p-6 rounded-3xl h-full flex flex-col justify-between relative overflow-hidden">
+                
+                <!-- Section Title & Controls Filter -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                    <div class="flex items-center space-x-2">
+                        <!-- Pokéball Icon -->
+                        <div class="w-6 h-6 rounded-full border-2 border-slate-200 relative overflow-hidden flex flex-col">
+                            <div class="h-1/2 bg-red-500"></div>
+                            <div class="h-1/2 bg-white"></div>
+                            <div class="absolute inset-x-0 top-1/2 transform -translate-y-1/2 h-0.5 bg-slate-800"></div>
+                            <div class="absolute inset-0 m-auto w-2 h-2 rounded-full border border-slate-800 bg-white"></div>
+                        </div>
+                        <h2 class="text-xl font-bold text-slate-100">寶可夢圖鑑</h2>
+                    </div>
+
+                    <!-- Filter Controls (Type & Search/Select) -->
+                    <div class="flex items-center space-x-2 w-full sm:w-auto">
+                        <select id="type-select" class="bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <option value="all">所有屬性 (All Types)</option>
+                            <option value="fire">🔥 火系 (Fire)</option>
+                            <option value="water">💧 水系 (Water)</option>
+                            <option value="grass">🍃 草系 (Grass)</option>
+                            <option value="electric">⚡ 電系 (Electric)</option>
+                            <option value="psychic">🔮 超能力 (Psychic)</option>
+                            <option value="ice">❄️ 冰系 (Ice)</option>
+                            <option value="dragon">🐉 龍系 (Dragon)</option>
+                            <option value="ghost">👻 幽靈 (Ghost)</option>
+                            <option value="fairy">✨ 妖精 (Fairy)</option>
+                        </select>
+
+                        <button id="cry-btn" title="播放寶可夢叫聲" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 active:scale-95 transition-all">
+                            <i class="fa-solid fa-volume-high"></i>
+                            <span class="hidden sm:inline">叫聲</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pokémon Showcase Box -->
+                <div class="relative w-full glass-card rounded-2xl p-6 flex flex-col items-center justify-between overflow-hidden my-2 min-h-[380px]">
+                    
+                    <!-- Background Glow Indicator -->
+                    <div id="poke-bg-glow" class="absolute inset-0 bg-amber-500/10 blur-3xl pointer-events-none transition-all duration-700"></div>
+
+                    <!-- Top ID & Name Banner -->
+                    <div class="w-full flex justify-between items-center z-10">
+                        <div>
+                            <span id="poke-id" class="text-xs font-bold text-amber-400/90 tracking-wider">#0025</span>
+                            <h3 id="poke-name-zh" class="text-2xl font-black text-slate-100 tracking-wide">皮卡丘</h3>
+                            <p id="poke-name-en" class="text-xs text-slate-400 capitalize">Pikachu</p>
+                        </div>
+                        
+                        <!-- Types Badges -->
+                        <div id="poke-types" class="flex flex-col gap-1 items-end">
+                            <!-- Dynamic Badges -->
+                        </div>
+                    </div>
+
+                    <!-- Artwork Display -->
+                    <div class="relative my-4 flex items-center justify-center poke-img-container z-10 w-48 h-48 sm:w-56 sm:h-56">
+                        <img id="poke-image" src="" alt="Pokemon Artwork" class="w-full h-full object-contain img-fade-out poke-float">
+                        
+                        <!-- Loading Indicator -->
+                        <div id="poke-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-md rounded-xl transition-opacity">
+                            <div class="w-12 h-12 rounded-full border-4 border-slate-300 relative overflow-hidden flex flex-col pokeball-spin shadow-lg">
+                                <div class="h-1/2 bg-red-500"></div>
+                                <div class="h-1/2 bg-white"></div>
+                                <div class="absolute inset-x-0 top-1/2 transform -translate-y-1/2 h-1 bg-slate-800"></div>
+                                <div class="absolute inset-0 m-auto w-3 h-3 rounded-full border-2 border-slate-800 bg-white"></div>
+                            </div>
+                            <span class="text-xs text-slate-300 font-medium mt-3">召喚寶可夢中...</span>
+                        </div>
+                    </div>
+
+                    <!-- Stats & Info Panel -->
+                    <div class="w-full z-10 space-y-2">
+                        <!-- Height & Weight Bar -->
+                        <div class="flex justify-around text-xs text-slate-300 glass-card py-2 px-4 rounded-xl">
+                            <div><i class="fa-solid fa-ruler-vertical text-amber-400 mr-1.5"></i>身高: <span id="poke-height" class="font-bold text-slate-100">0.4</span> m</div>
+                            <div class="w-px bg-slate-700"></div>
+                            <div><i class="fa-solid fa-weight-scale text-amber-400 mr-1.5"></i>體重: <span id="poke-weight" class="font-bold text-slate-100">6.0</span> kg</div>
+                        </div>
+
+                        <!-- Stats Progress Bars Grid -->
+                        <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                            <div>
+                                <div class="flex justify-between text-slate-400 mb-0.5">
+                                    <span>HP (生命)</span>
+                                    <span id="stat-hp" class="font-bold text-slate-200">35</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div id="bar-hp" class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: 20%;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-slate-400 mb-0.5">
+                                    <span>ATK (攻擊)</span>
+                                    <span id="stat-atk" class="font-bold text-slate-200">55</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div id="bar-atk" class="h-full bg-rose-500 rounded-full transition-all duration-500" style="width: 30%;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-slate-400 mb-0.5">
+                                    <span>DEF (防禦)</span>
+                                    <span id="stat-def" class="font-bold text-slate-200">40</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div id="bar-def" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width: 22%;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-slate-400 mb-0.5">
+                                    <span>SPD (速度)</span>
+                                    <span id="stat-spd" class="font-bold text-slate-200">90</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div id="bar-spd" class="h-full bg-amber-400 rounded-full transition-all duration-500" style="width: 60%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Slide Progress Bar -->
+                    <div class="absolute bottom-0 left-0 w-full h-1 bg-slate-800/80">
+                        <div id="progress-bar" class="h-full bg-amber-400 progress-running"></div>
+                    </div>
+                </div>
+
+                <!-- Controls Group -->
+                <div class="mt-3 flex items-center justify-between gap-2">
+                    <div class="flex items-center space-x-2">
+                        <button id="toggle-play-btn" class="p-3 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 rounded-xl text-slate-200 transition-all active:scale-95 text-sm" title="暫停/播放自動輪播">
+                            <i id="play-icon" class="fa-solid fa-pause"></i>
+                        </button>
+                        <button id="random-poke-btn" class="px-3 py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-xl text-xs font-semibold transition-all active:scale-95">
+                            <i class="fa-solid fa-shuffle mr-1"></i>隨機
+                        </button>
+                    </div>
+
+                    <button id="next-poke-btn" class="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-sm transition-all shadow-md active:scale-95 flex items-center space-x-2">
+                        <span>下一隻</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer Section -->
+    <footer class="max-w-7xl w-full mx-auto mt-6 text-center text-xs text-slate-400/80 py-2 flex flex-col sm:flex-row justify-between items-center gap-2">
+        <p>資料來源：<a href="https://open-meteo.com/" target="_blank" class="underline hover:text-amber-300">Open-Meteo</a> & <a href="https://pokeapi.co/" target="_blank" class="underline hover:text-amber-300">PokeAPI</a></p>
+        <p>© 2026 寶可夢天氣資訊看板 Dashboard.</p>
+    </footer>
+
+    <!-- Audio Element for Pokemon Cry -->
+    <audio id="poke-audio"></audio>
+
+    <script>
+        /**
+         * State Management & App Setup
+         */
+        const AppState = {
+            city: 'Taipei',
+            lat: 25.0330,
+            lon: 121.5654,
+            weatherTimer: null,
+            pokeTimer: null,
+            isSlideshowPlaying: true,
+            slideshowIntervalSec: 10,
+            selectedType: 'all',
+            currentPokeId: 25,
+            currentCryUrl: '',
+            filteredPokeList: []
+        };
+
+        // Pokemon Type Badge Colors & Names
+        const POKE_TYPES = {
+            normal: { name: '一般', color: 'bg-stone-500 text-white' },
+            fire: { name: '火系', color: 'bg-red-500 text-white' },
+            water: { name: '水系', color: 'bg-blue-500 text-white' },
+            grass: { name: '草系', color: 'bg-emerald-500 text-white' },
+            electric: { name: '電系', color: 'bg-amber-400 text-slate-900' },
+            ice: { name: '冰系', color: 'bg-sky-300 text-slate-900' },
+            fighting: { name: '格鬥', color: 'bg-orange-700 text-white' },
+            poison: { name: '毒系', color: 'bg-purple-600 text-white' },
+            ground: { name: '地面', color: 'bg-amber-700 text-white' },
+            flying: { name: '飛行', color: 'bg-indigo-400 text-white' },
+            psychic: { name: '超能力', color: 'bg-pink-500 text-white' },
+            bug: { name: '蟲系', color: 'bg-lime-600 text-white' },
+            rock: { name: '岩石', color: 'bg-yellow-700 text-white' },
+            ghost: { name: '幽靈', color: 'bg-purple-800 text-white' },
+            dragon: { name: '龍系', color: 'bg-indigo-700 text-white' },
+            steel: { name: '鋼鐵', color: 'bg-slate-400 text-slate-900' },
+            fairy: { name: '妖精', color: 'bg-pink-300 text-slate-900' }
+        };
+
+        // Weather WMO Code Dictionary
+        const WMO_WEATHER_CODES = {
+            0: { desc: '晴朗無雲', icon: 'fa-sun', color: 'text-amber-400' },
+            1: { desc: '大致晴朗', icon: 'fa-sun-cloud', color: 'text-amber-300' },
+            2: { desc: '多雲時晴', icon: 'fa-cloud-sun', color: 'text-sky-300' },
+            3: { desc: '陰天多雲', icon: 'fa-cloud', color: 'text-slate-300' },
+            45: { desc: '有霧', icon: 'fa-smog', color: 'text-slate-400' },
+            48: { desc: '霧淞與霧', icon: 'fa-smog', color: 'text-slate-400' },
+            51: { desc: '輕微細雨', icon: 'fa-cloud-rain', color: 'text-blue-300' },
+            53: { desc: '中等細雨', icon: 'fa-cloud-rain', color: 'text-blue-400' },
+            55: { desc: '強效細雨', icon: 'fa-cloud-showers-heavy', color: 'text-blue-500' },
+            61: { desc: '微量降雨', icon: 'fa-cloud-sun-rain', color: 'text-sky-400' },
+            63: { desc: '中等降雨', icon: 'fa-cloud-rain', color: 'text-blue-400' },
+            65: { desc: '大雨滂沱', icon: 'fa-cloud-showers-heavy', color: 'text-blue-600' },
+            71: { desc: '輕微降雪', icon: 'fa-snowflake', color: 'text-indigo-200' },
+            73: { desc: '中度降雪', icon: 'fa-snowflake', color: 'text-indigo-300' },
+            75: { desc: '強烈降雪', icon: 'fa-snowflake', color: 'text-indigo-400' },
+            80: { desc: '陣雨天氣', icon: 'fa-cloud-showers-water', color: 'text-sky-400' },
+            81: { desc: '強勁陣雨', icon: 'fa-cloud-showers-heavy', color: 'text-blue-500' },
+            82: { desc: '劇烈暴雨', icon: 'fa-cloud-bolt', color: 'text-purple-400' },
+            95: { desc: '雷陣雨', icon: 'fa-cloud-bolt', color: 'text-amber-500' },
+            96: { desc: '雷雨伴隨冰雹', icon: 'fa-cloud-bolt', color: 'text-red-400' }
+        };
+
+        const DOM = {
+            clock: document.getElementById('live-clock'),
+            locationName: document.getElementById('location-name'),
+            weatherDesc: document.getElementById('weather-description'),
+            weatherIcon: document.getElementById('weather-icon-container'),
+            currentTemp: document.getElementById('current-temp'),
+            feelsLike: document.getElementById('feels-like'),
+            humidity: document.getElementById('humidity'),
+            windSpeed: document.getElementById('wind-speed'),
+            tempMax: document.getElementById('temp-max'),
+            tempMin: document.getElementById('temp-min'),
+            hourlyForecast: document.getElementById('hourly-forecast'),
+            dailyForecast: document.getElementById('daily-forecast'),
+            cityInput: document.getElementById('city-search-input'),
+            searchBtn: document.getElementById('search-btn'),
+            gpsBtn: document.getElementById('gps-btn'),
+            
+            // Pokémon UI Elements
+            pokeId: document.getElementById('poke-id'),
+            pokeNameZh: document.getElementById('poke-name-zh'),
+            pokeNameEn: document.getElementById('poke-name-en'),
+            pokeImage: document.getElementById('poke-image'),
+            pokeLoader: document.getElementById('poke-loader'),
+            pokeTypes: document.getElementById('poke-types'),
+            pokeHeight: document.getElementById('poke-height'),
+            pokeWeight: document.getElementById('poke-weight'),
+            pokeBgGlow: document.getElementById('poke-bg-glow'),
+            statHp: document.getElementById('stat-hp'),
+            statAtk: document.getElementById('stat-atk'),
+            statDef: document.getElementById('stat-def'),
+            statSpd: document.getElementById('stat-spd'),
+            barHp: document.getElementById('bar-hp'),
+            barAtk: document.getElementById('bar-atk'),
+            barDef: document.getElementById('bar-def'),
+            barSpd: document.getElementById('bar-spd'),
+            
+            typeSelect: document.getElementById('type-select'),
+            cryBtn: document.getElementById('cry-btn'),
+            pokeAudio: document.getElementById('poke-audio'),
+            nextPokeBtn: document.getElementById('next-poke-btn'),
+            randomPokeBtn: document.getElementById('random-poke-btn'),
+            togglePlayBtn: document.getElementById('toggle-play-btn'),
+            playIcon: document.getElementById('play-icon'),
+            progressBar: document.getElementById('progress-bar')
+        };
+
+        function startLiveClock() {
+            const updateClock = () => {
+                const now = new Date();
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                DOM.clock.textContent = now.toLocaleDateString('zh-TW', options);
+            };
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        async function fetchWeatherData(lat, lon, placeName = null) {
+            try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`;
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('無法取得天氣資訊');
+                const data = await response.json();
+
+                if (!placeName) {
+                    placeName = await reverseGeocode(lat, lon);
+                }
+
+                renderWeather(data, placeName);
+            } catch (error) {
+                console.error('Weather Fetch Error:', error);
+                DOM.weatherDesc.textContent = '天氣數據更新失敗';
+            }
+        }
+
+        async function reverseGeocode(lat, lon) {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+                if (!res.ok) return `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+                const data = await res.json();
+                return data.address.city || data.address.town || data.address.county || '您的位置';
+            } catch {
+                return `經度:${lat.toFixed(1)} 緯度:${lon.toFixed(1)}`;
+            }
+        }
+
+        async function geocodeCity(cityName) {
+            try {
+                const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=zh&format=json`);
+                if (!res.ok) throw new Error('搜尋失敗');
+                const data = await res.json();
+                if (data.results && data.results.length > 0) {
+                    const place = data.results[0];
+                    AppState.lat = place.latitude;
+                    AppState.lon = place.longitude;
+                    AppState.city = place.name;
+                    fetchWeatherData(place.latitude, place.longitude, place.name);
+                } else {
+                    alert('找不到該城市，請輸入英文或繁體中文城市名稱');
+                }
+            } catch (err) {
+                alert('城市查詢發生錯誤');
+            }
+        }
+
+        function renderWeather(data, locationTitle) {
+            const current = data.current;
+            const daily = data.daily;
+            const hourly = data.hourly;
+
+            DOM.locationName.textContent = locationTitle;
+            const wmo = WMO_WEATHER_CODES[current.weather_code] || { desc: '未知天氣', icon: 'fa-cloud', color: 'text-slate-300' };
+            
+            DOM.weatherDesc.textContent = wmo.desc;
+            DOM.weatherIcon.innerHTML = `<i class="fa-solid ${wmo.icon} ${wmo.color}"></i>`;
+            
+            DOM.currentTemp.textContent = Math.round(current.temperature_2m);
+            DOM.feelsLike.textContent = Math.round(current.apparent_temperature);
+            DOM.humidity.textContent = `${current.relative_humidity_2m}%`;
+            DOM.windSpeed.textContent = `${Math.round(current.wind_speed_10m)} km/h`;
+
+            if (daily && daily.temperature_2m_max) {
+                DOM.tempMax.textContent = `${Math.round(daily.temperature_2m_max[0])}°C`;
+                DOM.tempMin.textContent = `${Math.round(daily.temperature_2m_min[0])}°C`;
+            }
+
+            // Render 24-Hour Forecast
+            DOM.hourlyForecast.innerHTML = '';
+            const currentHourIndex = new Date().getHours();
+            for (let i = currentHourIndex; i < currentHourIndex + 24; i++) {
+                if (!hourly.time[i]) break;
+                const timeStr = new Date(hourly.time[i]).getHours() + ':00';
+                const temp = Math.round(hourly.temperature_2m[i]);
+                const code = hourly.weather_code[i];
+                const codeMeta = WMO_WEATHER_CODES[code] || { icon: 'fa-cloud', color: 'text-slate-300' };
+
+                const card = document.createElement('div');
+                card.className = 'glass-card p-3 rounded-2xl flex flex-col items-center min-w-[70px] flex-shrink-0 text-center';
+                card.innerHTML = `
+                    <span class="text-xs text-slate-400">${timeStr}</span>
+                    <i class="fa-solid ${codeMeta.icon} ${codeMeta.color} text-lg my-2"></i>
+                    <span class="text-sm font-bold text-slate-100">${temp}°</span>
+                `;
+                DOM.hourlyForecast.appendChild(card);
+            }
+
+            // Render 7-Day Forecast
+            DOM.dailyForecast.innerHTML = '';
+            const weekdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+            for (let i = 0; i < Math.min(7, daily.time.length); i++) {
+                const date = new Date(daily.time[i]);
+                const dayName = i === 0 ? '今天' : weekdays[date.getDay()];
+                const maxTemp = Math.round(daily.temperature_2m_max[i]);
+                const minTemp = Math.round(daily.temperature_2m_min[i]);
+                const code = daily.weather_code[i];
+                const codeMeta = WMO_WEATHER_CODES[code] || { icon: 'fa-cloud', color: 'text-slate-300' };
+
+                const dayCard = document.createElement('div');
+                dayCard.className = 'glass-card p-2.5 rounded-2xl flex flex-col items-center text-center justify-between';
+                dayCard.innerHTML = `
+                    <span class="text-xs font-medium text-slate-300">${dayName}</span>
+                    <i class="fa-solid ${codeMeta.icon} ${codeMeta.color} text-xl my-2"></i>
+                    <div class="flex flex-col sm:flex-row text-xs gap-0.5 sm:gap-1">
+                        <span class="font-bold text-slate-100">${maxTemp}°</span>
+                        <span class="text-slate-400">${minTemp}°</span>
+                    </div>
+                `;
+                DOM.dailyForecast.appendChild(dayCard);
+            }
+        }
+
+        async function fetchPokemonData(idOrName) {
+            DOM.pokeLoader.classList.remove('opacity-0', 'pointer-events-none');
+            DOM.pokeImage.classList.add('img-fade-out');
+
+            try {
+                // Fetch basic data
+                const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${idOrName}`);
+                if (!res.ok) throw new Error('Pokemon Not Found');
+                const pokeData = await res.json();
+
+                // Fetch species for Chinese Name
+                const speciesRes = await fetch(pokeData.species.url);
+                const speciesData = await speciesRes.json();
+
+                let zhName = pokeData.name;
+                const zhEntry = speciesData.names.find(n => n.language.name === 'zh-Hant' || n.language.name === 'zh-Hans');
+                if (zhEntry) zhName = zhEntry.name;
+
+                renderPokemon(pokeData, zhName);
+            } catch (err) {
+                console.error('Fetch Pokemon Error:', err);
+                DOM.pokeLoader.classList.add('opacity-0', 'pointer-events-none');
+            }
+        }
+
+        async function fetchFilteredList(type) {
+            if (type === 'all') {
+                AppState.filteredPokeList = [];
+                return;
+            }
+            try {
+                const res = await fetch(`https://pokeapi.co/api/v2/type/${type}`);
+                const data = await res.json();
+                AppState.filteredPokeList = data.pokemon.map(p => p.pokemon.name);
+            } catch (err) {
+                console.error('Fetch Type List Error:', err);
+            }
+        }
+
+        function renderPokemon(data, zhName) {
+            AppState.currentPokeId = data.id;
+            DOM.pokeId.textContent = `#${String(data.id).padStart(4, '0')}`;
+            DOM.pokeNameZh.textContent = zhName;
+            DOM.pokeNameEn.textContent = data.name.charAt(0).toUpperCase() + data.name.slice(1);
+            
+            DOM.pokeHeight.textContent = (data.height / 10).toFixed(1);
+            DOM.pokeWeight.textContent = (data.weight / 10).toFixed(1);
+
+            // Render Types
+            DOM.pokeTypes.innerHTML = '';
+            data.types.forEach(t => {
+                const typeInfo = POKE_TYPES[t.type.name] || { name: t.type.name, color: 'bg-slate-600 text-white' };
+                const badge = document.createElement('span');
+                badge.className = `px-2.5 py-0.5 rounded-lg text-[10px] font-bold tracking-wider ${typeInfo.color}`;
+                badge.textContent = typeInfo.name;
+                DOM.pokeTypes.appendChild(badge);
+            });
+
+            // Stats
+            const getStat = (name) => {
+                const found = data.stats.find(s => s.stat.name === name);
+                return found ? found.base_stat : 0;
+            };
+
+            const hp = getStat('hp');
+            const atk = getStat('attack');
+            const def = getStat('defense');
+            const spd = getStat('speed');
+
+            DOM.statHp.textContent = hp;
+            DOM.statAtk.textContent = atk;
+            DOM.statDef.textContent = def;
+            DOM.statSpd.textContent = spd;
+
+            DOM.barHp.style.width = `${Math.min(100, (hp / 180) * 100)}%`;
+            DOM.barAtk.style.width = `${Math.min(100, (atk / 180) * 100)}%`;
+            DOM.barDef.style.width = `${Math.min(100, (def / 180) * 100)}%`;
+            DOM.barSpd.style.width = `${Math.min(100, (spd / 180) * 100)}%`;
+
+            // Official Artwork Image
+            const imgUrl = data.sprites.other['official-artwork'].front_default || data.sprites.front_default;
+            const imgPreload = new Image();
+            imgPreload.src = imgUrl;
+            imgPreload.onload = () => {
+                DOM.pokeImage.src = imgUrl;
+                DOM.pokeImage.classList.remove('img-fade-out');
+                DOM.pokeImage.classList.add('img-fade-in');
+                DOM.pokeLoader.classList.add('opacity-0', 'pointer-events-none');
+                resetSlideshowTimer();
+            };
+
+            // Audio Cry Setup
+            if (data.cries && data.cries.latest) {
+                AppState.currentCryUrl = data.cries.latest;
+                DOM.pokeAudio.src = data.cries.latest;
+                DOM.cryBtn.style.display = 'inline-flex';
+            } else {
+                AppState.currentCryUrl = '';
+                DOM.cryBtn.style.display = 'none';
+            }
+
+            // Glow color accent based on primary type
+            const primaryType = data.types[0].type.name;
+            updateGlowAndTheme(primaryType);
+        }
+
+        function updateGlowAndTheme(type) {
+            const colors = {
+                fire: 'rgba(239, 68, 68, 0.25)',
+                water: 'rgba(59, 130, 246, 0.25)',
+                grass: 'rgba(16, 185, 129, 0.25)',
+                electric: 'rgba(245, 158, 11, 0.25)',
+                psychic: 'rgba(236, 72, 153, 0.25)',
+                dragon: 'rgba(99, 102, 241, 0.25)',
+                ghost: 'rgba(147, 51, 234, 0.25)'
+            };
+            DOM.pokeBgGlow.style.backgroundColor = colors[type] || 'rgba(245, 158, 11, 0.15)';
+        }
+
+        function getNextPokemonId() {
+            if (AppState.selectedType !== 'all' && AppState.filteredPokeList.length > 0) {
+                const randomIndex = Math.floor(Math.random() * AppState.filteredPokeList.length);
+                return AppState.filteredPokeList[randomIndex];
+            }
+            // Default Gen 1 - Gen 8 range (1 ~ 898)
+            return Math.floor(Math.random() * 898) + 1;
+        }
+
+        function playPokeCry() {
+            if (AppState.currentCryUrl) {
+                DOM.pokeAudio.currentTime = 0;
+                DOM.pokeAudio.play().catch(e => console.log('Audio playback prevented', e));
+            }
+        }
+
+        function resetSlideshowTimer() {
+            DOM.progressBar.classList.remove('progress-running');
+            void DOM.progressBar.offsetWidth;
+            if (AppState.isSlideshowPlaying) {
+                DOM.progressBar.classList.add('progress-running');
+            }
+
+            clearInterval(AppState.pokeTimer);
+            if (AppState.isSlideshowPlaying) {
+                AppState.pokeTimer = setInterval(() => {
+                    fetchPokemonData(getNextPokemonId());
+                }, AppState.slideshowIntervalSec * 1000);
+            }
+        }
+
+        function toggleSlideshow() {
+            AppState.isSlideshowPlaying = !AppState.isSlideshowPlaying;
+            if (AppState.isSlideshowPlaying) {
+                DOM.playIcon.className = 'fa-solid fa-pause';
+                DOM.progressBar.classList.remove('progress-paused');
+                fetchPokemonData(getNextPokemonId());
+            } else {
+                DOM.playIcon.className = 'fa-solid fa-play';
+                DOM.progressBar.classList.add('progress-paused');
+                clearInterval(AppState.pokeTimer);
+            }
+        }
+
+        function setupEventListeners() {
+            DOM.searchBtn.addEventListener('click', () => {
+                const city = DOM.cityInput.value.trim();
+                if (city) geocodeCity(city);
+            });
+
+            DOM.cityInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const city = DOM.cityInput.value.trim();
+                    if (city) geocodeCity(city);
+                }
+            });
+
+            DOM.gpsBtn.addEventListener('click', () => {
+                if (navigator.geolocation) {
+                    DOM.locationName.textContent = '定位中...';
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            AppState.lat = pos.coords.latitude;
+                            AppState.lon = pos.coords.longitude;
+                            fetchWeatherData(AppState.lat, AppState.lon);
+                        },
+                        () => {
+                            alert('無法取得您的位置，切換預設城市（台北）');
+                            fetchWeatherData(AppState.lat, AppState.lon, 'Taipei (台北)');
+                        }
+                    );
+                }
+            });
+
+            // Pokémon Controls
+            DOM.nextPokeBtn.addEventListener('click', () => {
+                fetchPokemonData(getNextPokemonId());
+            });
+
+            DOM.randomPokeBtn.addEventListener('click', () => {
+                const randomId = Math.floor(Math.random() * 898) + 1;
+                fetchPokemonData(randomId);
+            });
+
+            DOM.togglePlayBtn.addEventListener('click', toggleSlideshow);
+
+            DOM.cryBtn.addEventListener('click', playPokeCry);
+
+            DOM.typeSelect.addEventListener('change', async (e) => {
+                AppState.selectedType = e.target.value;
+                await fetchFilteredList(AppState.selectedType);
+                fetchPokemonData(getNextPokemonId());
+            });
+        }
+
+        window.onload = function() {
+            startLiveClock();
+            setupEventListeners();
+
+            // Weather Initialization
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        AppState.lat = pos.coords.latitude;
+                        AppState.lon = pos.coords.longitude;
+                        fetchWeatherData(AppState.lat, AppState.lon);
+                    },
+                    () => {
+                        fetchWeatherData(AppState.lat, AppState.lon, 'Taipei (台北)');
+                    }
+                );
+            } else {
+                fetchWeatherData(AppState.lat, AppState.lon, 'Taipei (台北)');
+            }
+
+            // Initial Pikachu (#25)
+            fetchPokemonData(25);
+
+            // Auto Weather Refresh Every 15 Minutes
+            AppState.weatherTimer = setInterval(() => {
+                fetchWeatherData(AppState.lat, AppState.lon, AppState.city);
+            }, 15 * 60 * 1000);
+        };
+    </script>
+</body>
+</html>
